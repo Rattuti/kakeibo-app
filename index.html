@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>家計簿アプリ</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --border: #e2e5ea;
+    --text: #24292f;
+    --muted: #6b7280;
+    --accent: #3d5a80;
+    --danger: #c0392b;
+    --food: #e07a5f;
+    --rent: #3d5a80;
+    --transit: #81b29a;
+    --fun: #f2cc8f;
+    --other: #9b9b9b;
+    --income: #588157;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 20px; font-size: 0.9rem; }
+  .layout { display: grid; grid-template-columns: 1fr; gap: 16px; max-width: 1100px; margin: 0 auto; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .panel h2 { font-size: 1rem; margin: 0 0 12px; }
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 28px;
+    text-align: center;
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .dropzone.drag { border-color: var(--accent); background: #eef2f7; }
+  .dropzone input { display: none; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row.between { justify-content: space-between; }
+  select, input[type=text], button {
+    font: inherit;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+  }
+  button { cursor: pointer; background: var(--accent); color: #fff; border: none; }
+  button:hover { opacity: 0.9; }
+  button.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
+  button.danger-btn { background: var(--danger); }
+  .hint { font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 8px; }
+  .stat { background: var(--bg); border-radius: 8px; padding: 12px 14px; }
+  .stat .label { font-size: 0.78rem; color: var(--muted); }
+  .stat .value { font-size: 1.25rem; font-weight: 600; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td.desc { white-space: normal; max-width: 320px; }
+  th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); }
+  .table-wrap { max-height: 380px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .cat-select { padding: 3px 6px; font-size: 0.82rem; }
+  .amt-pos { color: var(--income); }
+  .amt-neg { color: var(--danger); }
+  .rules-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow: auto; margin-bottom: 12px; }
+  .rule-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; background: var(--bg); border-radius: 6px; padding: 5px 8px; }
+  .rule-item .kw { font-weight: 600; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.75rem; color: #fff; }
+  .rule-item .rm { margin-left: auto; background: none; color: var(--muted); border: none; cursor: pointer; font-size: 0.9rem; padding: 0 4px; }
+  .rule-item .rm:hover { color: var(--danger); }
+  .charts { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+  @media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
+  canvas { width: 100%; }
+  .legend { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 0.85rem; }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+  .empty { color: var(--muted); text-align: center; padding: 30px 0; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div>
+    <h1>家計簿アプリ</h1>
+    <p class="subtitle">銀行の取引明細CSVを読み込んで、自動でカテゴリ分類・集計します(データは保存されず、ブラウザ内メモリのみで完結します)</p>
+  </div>
+
+  <div class="panel">
+    <h2>1. CSVアップロード</h2>
+    <div class="row" style="margin-bottom: 12px;">
+      <label>文字コード:
+        <select id="encodingSelect">
+          <option value="UTF-8">UTF-8</option>
+          <option value="Shift_JIS">Shift_JIS(多くの銀行CSVはこちら)</option>
+        </select>
+      </label>
+      <button type="button" class="secondary" id="sampleBtn">サンプルデータを試す</button>
+      <button type="button" class="secondary" id="clearBtn">クリア</button>
+    </div>
+    <div class="dropzone" id="dropzone">
+      <div>CSVファイルをここにドラッグ&ドロップ、またはクリックして選択</div>
+      <div class="hint">想定列: 日付・摘要・金額(列名が見つからない場合は左から3列をこの順で使用します)</div>
+      <input type="file" id="fileInput" accept=".csv,text/csv">
+    </div>
+    <div class="hint" id="fileStatus"></div>
+  </div>
+
+  <div class="panel">
+    <h2>2. 分類ルール</h2>
+    <div class="rules-list" id="rulesList"></div>
+    <div class="row">
+      <input type="text" id="ruleKeyword" placeholder="キーワード(例: スターバックス)">
+      <select id="ruleCategory"></select>
+      <button type="button" id="addRuleBtn">ルール追加</button>
+    </div>
+    <p class="hint">摘要にキーワードが含まれる場合、上のリストの上から順に最初に一致したカテゴリが適用されます。金額が0以上の取引は自動的に「収入」になります。</p>
+  </div>
+
+  <div class="panel">
+    <h2>集計</h2>
+    <div class="stats">
+      <div class="stat"><div class="label">総収入</div><div class="value amt-pos" id="statIncome">¥0</div></div>
+      <div class="stat"><div class="label">総支出</div><div class="value amt-neg" id="statExpense">¥0</div></div>
+      <div class="stat"><div class="label">収支</div><div class="value" id="statNet">¥0</div></div>
+      <div class="stat"><div class="label">件数</div><div class="value" id="statCount">0</div></div>
+    </div>
+    <div class="charts">
+      <div>
+        <div class="hint" style="margin-bottom:6px;">月別支出推移</div>
+        <canvas id="barChart" height="220"></canvas>
+      </div>
+      <div>
+        <div class="hint" style="margin-bottom:6px;">カテゴリ別支出内訳</div>
+        <canvas id="pieChart" height="220"></canvas>
+        <div class="legend" id="pieLegend"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>3. 取引明細</h2>
+    <div class="table-wrap">
+      <table id="txnTable">
+        <thead>
+          <tr><th>日付</th><th>摘要</th><th>金額</th><th>カテゴリ</th></tr>
+        </thead>
+        <tbody id="txnBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyMsg">CSVを読み込むと、ここに取引一覧が表示されます</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var CATEGORIES = ["食費", "家賃", "交通費", "娯楽", "その他", "収入"];
+  var CATEGORY_COLORS = {
+    "食費": "#e07a5f",
+    "家賃": "#3d5a80",
+    "交通費": "#81b29a",
+    "娯楽": "#f2cc8f",
+    "その他": "#9b9b9b",
+    "収入": "#588157"
+  };
+
+  var DEFAULT_RULES = [
+    { keyword: "家賃", category: "家賃" },
+    { keyword: "マンション", category: "家賃" },
+    { keyword: "不動産", category: "家賃" },
+    { keyword: "スーパー", category: "食費" },
+    { keyword: "コンビニ", category: "食費" },
+    { keyword: "セブン", category: "食費" },
+    { keyword: "ローソン", category: "食費" },
+    { keyword: "ファミマ", category: "食費" },
+    { keyword: "イオン", category: "食費" },
+    { keyword: "マクドナルド", category: "食費" },
+    { keyword: "スタバ", category: "食費" },
+    { keyword: "カフェ", category: "食費" },
+    { keyword: "レストラン", category: "食費" },
+    { keyword: "飲食", category: "食費" },
+    { keyword: "JR", category: "交通費" },
+    { keyword: "電車", category: "交通費" },
+    { keyword: "地下鉄", category: "交通費" },
+    { keyword: "バス", category: "交通費" },
+    { keyword: "タクシー", category: "交通費" },
+    { keyword: "Suica", category: "交通費" },
+    { keyword: "PASMO", category: "交通費" },
+    { keyword: "ETC", category: "交通費" },
+    { keyword: "ガソリン", category: "交通費" },
+    { keyword: "映画", category: "娯楽" },
+    { keyword: "Netflix", category: "娯楽" },
+    { keyword: "Amazon Prime", category: "娯楽" },
+    { keyword: "カラオケ", category: "娯楽" },
+    { keyword: "ゲーム", category: "娯楽" },
+    { keyword: "旅行", category: "娯楽" }
+  ];
+
+  var SAMPLE_CSV =
+    "日付,摘要,金額\n" +
+    "2026-06-01,給与振込 カ)サンプル,280000\n" +
+    "2026-06-02,家賃 サンプルマンション202,-85000\n" +
+    "2026-06-03,セブンイレブン渋谷店,-680\n" +
+    "2026-06-04,JR東日本 定期券,-12000\n" +
+    "2026-06-06,スターバックス 新宿店,-540\n" +
+    "2026-06-08,Netflix月額,-1490\n" +
+    "2026-06-10,イオン品川店,-4320\n" +
+    "2026-06-12,タクシー代,-2100\n" +
+    "2026-06-15,カラオケ館,-3200\n" +
+    "2026-06-18,不明な支払い先ABC,-5000\n" +
+    "2026-07-01,給与振込 カ)サンプル,280000\n" +
+    "2026-07-02,家賃 サンプルマンション202,-85000\n" +
+    "2026-07-05,ローソン渋谷2丁目店,-920\n" +
+    "2026-07-09,映画館 TOHOシネマズ,-1900\n" +
+    "2026-07-14,ガソリンスタンド,-4500\n";
+
+  var state = {
+    rules: DEFAULT_RULES.slice(),
+    txns: [] // { date, desc, amount, category, manual }
+  };
+
+  // ---------- CSV parsing ----------
+  function parseCSV(text) {
+    var rows = [];
+    var row = [];
+    var field = "";
+    var inQuotes = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else { inQuotes = false; }
+        } else {
+          field += c;
+        }
+      } else {
+        if (c === '"') {
+          inQuotes = true;
+        } else if (c === ",") {
+          row.push(field); field = "";
+        } else if (c === "\n" || c === "\r") {
+          if (c === "\r" && text[i + 1] === "\n") i++;
+          row.push(field); field = "";
+          if (!(row.length === 1 && row[0] === "")) rows.push(row);
+          row = [];
+        } else {
+          field += c;
+        }
+      }
+    }
+    if (field !== "" || row.length) {
+      row.push(field);
+      if (!(row.length === 1 && row[0] === "")) rows.push(row);
+    }
+    return rows;
+  }
+
+  function findColumn(header, keys) {
+    for (var i = 0; i < header.length; i++) {
+      var h = header[i].trim().toLowerCase();
+      for (var j = 0; j < keys.length; j++) {
+        if (h.indexOf(keys[j].toLowerCase()) !== -1) return i;
+      }
+    }
+    return -1;
+  }
+
+  function parseAmount(raw) {
+    if (raw == null) return NaN;
+    var s = String(raw).trim();
+    s = s.replace(/[¥￥円,\s]/g, "");
+    var negative = false;
+    if (/^\(.*\)$/.test(s)) { negative = true; s = s.slice(1, -1); }
+    var n = parseFloat(s);
+    if (isNaN(n)) return NaN;
+    if (negative) n = -Math.abs(n);
+    return n;
+  }
+
+  function loadCSVText(text) {
+    var rows = parseCSV(text).filter(function (r) { return r.some(function (f) { return f.trim() !== ""; }); });
+    if (!rows.length) { setStatus("CSVにデータが見つかりませんでした", true); return; }
+
+    var header = rows[0];
+    var dateIdx = findColumn(header, ["日付", "年月日", "取引日", "date"]);
+    var descIdx = findColumn(header, ["摘要", "内容", "取引内容", "件名", "description"]);
+    var amountIdx = findColumn(header, ["金額", "取引金額", "amount"]);
+
+    var dataRows = rows.slice(1);
+    if (dateIdx === -1 || descIdx === -1 || amountIdx === -1) {
+      // ヘッダーが認識できない場合は、先頭行もデータとみなし左から3列を使用
+      dateIdx = 0; descIdx = 1; amountIdx = 2;
+      dataRows = rows;
+    }
+
+    var newTxns = [];
+    for (var i = 0; i < dataRows.length; i++) {
+      var r = dataRows[i];
+      if (r.length <= Math.max(dateIdx, descIdx, amountIdx)) continue;
+      var amount = parseAmount(r[amountIdx]);
+      if (isNaN(amount)) continue;
+      var desc = (r[descIdx] || "").trim();
+      var date = (r[dateIdx] || "").trim();
+      newTxns.push({
+        date: date,
+        desc: desc,
+        amount: amount,
+        category: categorize(desc, amount),
+        manual: false
+      });
+    }
+
+    if (!newTxns.length) {
+      setStatus("有効な取引が見つかりませんでした。列の並びや文字コードをご確認ください。", true);
+      return;
+    }
+
+    state.txns = newTxns;
+    setStatus(newTxns.length + " 件の取引を読み込みました");
+    renderAll();
+  }
+
+  function setStatus(msg, isError) {
+    var el = document.getElementById("fileStatus");
+    el.textContent = msg;
+    el.style.color = isError ? "var(--danger)" : "var(--muted)";
+  }
+
+  // ---------- Categorization ----------
+  function categorize(desc, amount) {
+    if (amount >= 0) return "収入";
+    var lower = desc.toLowerCase();
+    for (var i = 0; i < state.rules.length; i++) {
+      var kw = state.rules[i].keyword.toLowerCase();
+      if (kw && lower.indexOf(kw) !== -1) return state.rules[i].category;
+    }
+    return "その他";
+  }
+
+  function reapplyRulesToAuto() {
+    state.txns.forEach(function (t) {
+      if (!t.manual) t.category = categorize(t.desc, t.amount);
+    });
+  }
+
+  // ---------- Rendering: rules ----------
+  function renderRuleCategoryOptions(select) {
+    select.innerHTML = "";
+    CATEGORIES.filter(function (c) { return c !== "収入"; }).forEach(function (c) {
+      var opt = document.createElement("option");
+      opt.value = c; opt.textContent = c;
+      select.appendChild(opt);
+    });
+  }
+
+  function renderRules() {
+    var list = document.getElementById("rulesList");
+    list.innerHTML = "";
+    if (!state.rules.length) {
+      var empty = document.createElement("div");
+      empty.className = "hint";
+      empty.textContent = "ルールがありません。すべて「その他」に分類されます。";
+      list.appendChild(empty);
+      return;
+    }
+    state.rules.forEach(function (rule, idx) {
+      var item = document.createElement("div");
+      item.className = "rule-item";
+
+      var badge = document.createElement("span");
+      badge.className = "badge";
+      badge.style.background = CATEGORY_COLORS[rule.category] || "#999";
+      badge.textContent = rule.category;
+
+      var kw = document.createElement("span");
+      kw.className = "kw";
+      kw.textContent = rule.keyword;
+
+      var rm = document.createElement("button");
+      rm.className = "rm";
+      rm.type = "button";
+      rm.textContent = "✕";
+      rm.addEventListener("click", function () {
+        state.rules.splice(idx, 1);
+        reapplyRulesToAuto();
+        renderAll();
+      });
+
+      item.appendChild(badge);
+      item.appendChild(kw);
+      item.appendChild(rm);
+      list.appendChild(item);
+    });
+  }
+
+  // ---------- Rendering: table ----------
+  function formatYen(n) {
+    var sign = n < 0 ? "-" : "";
+    return sign + "¥" + Math.abs(Math.round(n)).toLocaleString("ja-JP");
+  }
+
+  function renderTable() {
+    var body = document.getElementById("txnBody");
+    body.innerHTML = "";
+    var emptyMsg = document.getElementById("emptyMsg");
+    emptyMsg.style.display = state.txns.length ? "none" : "block";
+
+    state.txns.forEach(function (t, idx) {
+      var tr = document.createElement("tr");
+
+      var tdDate = document.createElement("td");
+      tdDate.textContent = t.date;
+
+      var tdDesc = document.createElement("td");
+      tdDesc.className = "desc";
+      tdDesc.textContent = t.desc;
+
+      var tdAmt = document.createElement("td");
+      tdAmt.textContent = formatYen(t.amount);
+      tdAmt.className = t.amount >= 0 ? "amt-pos" : "amt-neg";
+
+      var tdCat = document.createElement("td");
+      var sel = document.createElement("select");
+      sel.className = "cat-select";
+      CATEGORIES.forEach(function (c) {
+        var opt = document.createElement("option");
+        opt.value = c; opt.textContent = c;
+        if (c === t.category) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener("change", function () {
+        t.category = sel.value;
+        t.manual = true;
+        renderStatsAndCharts();
+      });
+      tdCat.appendChild(sel);
+
+      tr.appendChild(tdDate);
+      tr.appendChild(tdDesc);
+      tr.appendChild(tdAmt);
+      tr.appendChild(tdCat);
+      body.appendChild(tr);
+    });
+  }
+
+  // ---------- Rendering: stats & charts ----------
+  function renderStatsAndCharts() {
+    var income = 0, expense = 0;
+    var monthTotals = {}; // "YYYY-MM" -> expense total (positive number)
+    var catTotals = {}; // category -> expense total (positive number), excludes 収入
+
+    state.txns.forEach(function (t) {
+      if (t.amount >= 0) {
+        income += t.amount;
+      } else {
+        expense += -t.amount;
+        var month = (t.date.match(/^\d{4}-\d{2}/) || [t.date.slice(0, 7)])[0];
+        monthTotals[month] = (monthTotals[month] || 0) + (-t.amount);
+        catTotals[t.category] = (catTotals[t.category] || 0) + (-t.amount);
+      }
+    });
+
+    document.getElementById("statIncome").textContent = formatYen(income);
+    document.getElementById("statExpense").textContent = formatYen(expense);
+    var net = income - expense;
+    var netEl = document.getElementById("statNet");
+    netEl.textContent = formatYen(net);
+    netEl.className = "value " + (net >= 0 ? "amt-pos" : "amt-neg");
+    document.getElementById("statCount").textContent = state.txns.length;
+
+    var months = Object.keys(monthTotals).sort();
+    drawBarChart(document.getElementById("barChart"), months, months.map(function (m) { return monthTotals[m]; }));
+
+    var cats = Object.keys(catTotals).sort(function (a, b) { return catTotals[b] - catTotals[a]; });
+    drawPieChart(document.getElementById("pieChart"), cats, cats.map(function (c) { return catTotals[c]; }));
+    renderPieLegend(cats, catTotals, cats.reduce(function (s, c) { return s + catTotals[c]; }, 0));
+  }
+
+  function renderPieLegend(cats, catTotals, total) {
+    var legend = document.getElementById("pieLegend");
+    legend.innerHTML = "";
+    if (!cats.length) return;
+    cats.forEach(function (c) {
+      var item = document.createElement("div");
+      item.className = "legend-item";
+      var sw = document.createElement("span");
+      sw.className = "swatch";
+      sw.style.background = CATEGORY_COLORS[c] || "#999";
+      var pct = total > 0 ? (catTotals[c] / total * 100).toFixed(1) : "0.0";
+      var label = document.createElement("span");
+      label.textContent = c + "  " + formatYen(catTotals[c]) + " (" + pct + "%)";
+      item.appendChild(sw);
+      item.appendChild(label);
+      legend.appendChild(item);
+    });
+  }
+
+  function setupCanvas(canvas) {
+    var dpr = window.devicePixelRatio || 1;
+    var cssWidth = canvas.clientWidth || canvas.parentElement.clientWidth || 400;
+    var cssHeight = parseInt(canvas.getAttribute("height"), 10) || 220;
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    canvas.style.height = cssHeight + "px";
+    var ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+    return { ctx: ctx, w: cssWidth, h: cssHeight };
+  }
+
+  function drawBarChart(canvas, labels, values) {
+    var setup = setupCanvas(canvas);
+    var ctx = setup.ctx, w = setup.w, h = setup.h;
+    if (!labels.length) {
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = "13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("データがありません", w / 2, h / 2);
+      return;
+    }
+    var padLeft = 60, padBottom = 30, padTop = 12, padRight = 12;
+    var chartW = w - padLeft - padRight;
+    var chartH = h - padTop - padBottom;
+    var maxVal = Math.max.apply(null, values) || 1;
+
+    // grid + y labels
+    ctx.strokeStyle = "#e2e5ea";
+    ctx.fillStyle = "#6b7280";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "right";
+    var steps = 4;
+    for (var s = 0; s <= steps; s++) {
+      var y = padTop + chartH - (chartH * s / steps);
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(padLeft + chartW, y);
+      ctx.stroke();
+      var val = maxVal * s / steps;
+      ctx.fillText(Math.round(val).toLocaleString("ja-JP"), padLeft - 8, y + 4);
+    }
+
+    var barSlot = chartW / labels.length;
+    var barWidth = Math.min(48, barSlot * 0.6);
+    ctx.fillStyle = "#3d5a80";
+    ctx.textAlign = "center";
+    for (var i = 0; i < labels.length; i++) {
+      var barH = maxVal > 0 ? (values[i] / maxVal) * chartH : 0;
+      var x = padLeft + barSlot * i + (barSlot - barWidth) / 2;
+      var y2 = padTop + chartH - barH;
+      ctx.fillStyle = "#3d5a80";
+      ctx.fillRect(x, y2, barWidth, barH);
+      ctx.fillStyle = "#374151";
+      ctx.fillText(labels[i], x + barWidth / 2, padTop + chartH + 18);
+    }
+  }
+
+  function drawPieChart(canvas, labels, values) {
+    var setup = setupCanvas(canvas);
+    var ctx = setup.ctx, w = setup.w, h = setup.h;
+    var total = values.reduce(function (a, b) { return a + b; }, 0);
+    var cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2 - 10;
+
+    if (!labels.length || total <= 0) {
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = "13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("データがありません", w / 2, h / 2);
+      return;
+    }
+
+    var start = -Math.PI / 2;
+    for (var i = 0; i < labels.length; i++) {
+      var slice = (values[i] / total) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, start, start + slice);
+      ctx.closePath();
+      ctx.fillStyle = CATEGORY_COLORS[labels[i]] || "#999";
+      ctx.fill();
+      start += slice;
+    }
+
+    // donut hole
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+  }
+
+  function renderAll() {
+    renderRules();
+    renderTable();
+    renderStatsAndCharts();
+  }
+
+  // ---------- File handling ----------
+  function readFile(file) {
+    var encoding = document.getElementById("encodingSelect").value;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var decoder = new TextDecoder(encoding);
+        var text = decoder.decode(reader.result);
+        loadCSVText(text);
+      } catch (e) {
+        setStatus("読み込みに失敗しました: " + e.message, true);
+      }
+    };
+    reader.onerror = function () {
+      setStatus("ファイルの読み込みに失敗しました", true);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // ---------- Init / events ----------
+  function init() {
+    renderRuleCategoryOptions(document.getElementById("ruleCategory"));
+
+    var dropzone = document.getElementById("dropzone");
+    var fileInput = document.getElementById("fileInput");
+
+    dropzone.addEventListener("click", function () { fileInput.click(); });
+    fileInput.addEventListener("change", function () {
+      if (fileInput.files.length) readFile(fileInput.files[0]);
+    });
+
+    ["dragenter", "dragover"].forEach(function (ev) {
+      dropzone.addEventListener(ev, function (e) {
+        e.preventDefault();
+        dropzone.classList.add("drag");
+      });
+    });
+    ["dragleave", "drop"].forEach(function (ev) {
+      dropzone.addEventListener(ev, function (e) {
+        e.preventDefault();
+        dropzone.classList.remove("drag");
+      });
+    });
+    dropzone.addEventListener("drop", function (e) {
+      var files = e.dataTransfer.files;
+      if (files && files.length) readFile(files[0]);
+    });
+
+    document.getElementById("addRuleBtn").addEventListener("click", function () {
+      var kwInput = document.getElementById("ruleKeyword");
+      var catSelect = document.getElementById("ruleCategory");
+      var kw = kwInput.value.trim();
+      if (!kw) return;
+      state.rules.unshift({ keyword: kw, category: catSelect.value });
+      kwInput.value = "";
+      reapplyRulesToAuto();
+      renderAll();
+    });
+    document.getElementById("ruleKeyword").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") document.getElementById("addRuleBtn").click();
+    });
+
+    document.getElementById("sampleBtn").addEventListener("click", function () {
+      loadCSVText(SAMPLE_CSV);
+    });
+
+    document.getElementById("clearBtn").addEventListener("click", function () {
+      state.txns = [];
+      setStatus("");
+      renderAll();
+    });
+
+    window.addEventListener("resize", renderStatsAndCharts);
+
+    renderAll();
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
+})();
+</script>
+</body>
+</html>
