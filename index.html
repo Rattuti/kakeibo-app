@@ -1004,6 +1004,22 @@
     ctx.fill();
   }
 
+  // 過去に使った口座名をdatalistの候補に追加(同じ口座名の入力ゆれ・タイプミスによる集計分裂を防ぐ)
+  function updateAccountOptions() {
+    var datalist = document.getElementById("accountOptions");
+    if (!datalist) return;
+    var existing = {};
+    Array.prototype.forEach.call(datalist.options, function (o) { existing[o.value] = true; });
+    state.txns.forEach(function (t) {
+      if (t.account && !existing[t.account]) {
+        existing[t.account] = true;
+        var opt = document.createElement("option");
+        opt.value = t.account;
+        datalist.appendChild(opt);
+      }
+    });
+  }
+
   function renderAll() {
     renderRules();
     renderTable();
@@ -1011,6 +1027,7 @@
     renderAccountSummary();
     renderStatsAndCharts();
     renderComparisonCheck();
+    updateAccountOptions();
   }
 
   // ---------- File handling ----------
@@ -1082,9 +1099,12 @@
     document.getElementById("sampleBtn").addEventListener("click", function () {
       loadCSVText(SAMPLE_CSV_BANK, { mode: "replace", account: "ゆうちょ銀行" });
       loadCSVText(SAMPLE_CSV_CARD, { mode: "append", account: "楽天カード" });
+      // 上の2回の読み込みで個別のステータスメッセージが上書きされてしまうため、まとめて表示し直す
+      setStatus("サンプルデータを読み込みました(" + state.txns.length + " 件: ゆうちょ銀行・楽天カード)");
     });
 
     document.getElementById("clearBtn").addEventListener("click", function () {
+      if (state.txns.length && !window.confirm("すべての取引データを削除します。よろしいですか?(この操作は元に戻せません)")) return;
       state.txns = [];
       saveState();
       setStatus("");
