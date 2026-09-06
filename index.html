@@ -81,6 +81,17 @@
   .legend-item { display: flex; align-items: center; gap: 8px; }
   .swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
   .empty { color: var(--muted); text-align: center; padding: 30px 0; font-size: 0.9rem; }
+  .cmp-card { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; }
+  .cmp-card h3 { margin: 0 0 4px; font-size: 0.95rem; }
+  .cmp-card .cmp-amount { color: var(--muted); font-size: 0.85rem; margin-bottom: 8px; }
+  .cmp-note { font-size: 0.83rem; color: var(--muted); margin-bottom: 10px; }
+  .cmp-providers { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+  .cmp-provider { background: var(--bg); border-radius: 6px; padding: 8px 10px; font-size: 0.85rem; }
+  .cmp-provider .name { font-weight: 600; margin-bottom: 2px; }
+  .cmp-plan-input { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .cmp-plan-input input { flex: 1; min-width: 160px; }
+  .cmp-sources { font-size: 0.78rem; color: var(--muted); }
+  .cmp-sources a { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -157,6 +168,17 @@
   </div>
 
   <div class="panel">
+    <h2>固定費 見直しチェック(電力・ガス・携帯)</h2>
+    <p class="hint" style="margin-top:0;" id="comparisonMeta"></p>
+    <div class="row" style="margin-bottom: 12px;">
+      <button type="button" id="comparisonCheckBtn">比較を確認</button>
+      <span class="hint" id="comparisonLastChecked" style="margin-top:0;"></span>
+    </div>
+    <div id="comparisonList"></div>
+    <div class="empty" id="comparisonEmptyMsg">CSVを読み込むと、電力・ガス・携帯の支払いを自動検出してここに比較目安を表示します</div>
+  </div>
+
+  <div class="panel">
     <h2>3. 取引明細</h2>
     <div class="table-wrap">
       <table id="txnTable">
@@ -202,6 +224,16 @@
     { keyword: "UQモバイル", category: "固定費" },
     { keyword: "mineo", category: "固定費" },
     { keyword: "IIJmio", category: "固定費" },
+    { keyword: "ahamo", category: "固定費" },
+    { keyword: "povo", category: "固定費" },
+    { keyword: "LINEMO", category: "固定費" },
+    { keyword: "関西電力", category: "固定費" },
+    { keyword: "KEPCO", category: "固定費" },
+    { keyword: "Looopでんき", category: "固定費" },
+    { keyword: "ENEOSでんき", category: "固定費" },
+    { keyword: "auでんき", category: "固定費" },
+    { keyword: "大阪ガス", category: "固定費" },
+    { keyword: "エルピオ", category: "固定費" },
     { keyword: "スーパー", category: "食費" },
     { keyword: "コンビニ", category: "食費" },
     { keyword: "セブン", category: "食費" },
@@ -230,6 +262,74 @@
     { keyword: "旅行", category: "娯楽" }
   ];
 
+  // ---------- 固定費 比較データ(静的に埋め込み。ブラウザ内で完結するアプリのため、リアルタイム取得はできない) ----------
+  // researchedAt: このデータをWeb検索で調査した基準日。古くなったら「比較データ更新して」と頼んで調べ直す運用。
+  var COMPARISON_DATA = {
+    researchedAt: "2026-09-06",
+    categories: {
+      "電力": {
+        note: "電気代は世帯人数や使用量によって有利不利が変わります。一般に一人〜二人暮らしは大手電力(従量電灯)の方が安いことが多く、四人以上の世帯や日中不在が多い家庭は新電力(市場連動型等)が有利になりやすい傾向があります。(要確認: 具体的な差額は世帯・時期により変動)",
+        providers: [
+          { name: "関西電力(従量電灯A)", summary: "基本料金＋3段階の電力量料金＋燃料費調整額＋再エネ賦課金という伝統的な体系。料金が安定していてシンプル。一人〜二人暮らしなら新電力より安いことが多い" },
+          { name: "Looopでんき(スマートタイムONE)", summary: "基本料金0円、市場連動型で30分ごとに単価が変動。電気を使う時間を調整できる人・日中家を空けている人・使用量が多い世帯で有利になりやすい" }
+        ],
+        sources: [
+          { title: "関西電力とLooopでんき（ループでんき）を徹底比較", url: "https://enechange.jp/articles/kepco-looop-hikaku" }
+        ]
+      },
+      "ガス": {
+        note: "大阪ガスの「一般料金」は2026年9月30日で新規受付を終了し、10月1日以降は基本料金を引き上げた「一般料金S」に移行(標準家庭で月35円程度の負担増、11月請求分から適用)。乗り換え先の候補として、大阪ガスエリア対応の新規ガス会社の方が安いケースがある",
+        providers: [
+          { name: "大阪ガス(一般料金→一般料金S)", summary: "2026年10月以降の新規契約は基本料金が値上げされた「一般料金S」になる" },
+          { name: "エルピオ都市ガス", summary: "大阪ガスエリア対応の新規ガス会社。一人暮らし世帯で月3,208円という比較的安い料金例あり(要確認: 世帯人数・使用量で変動)" }
+        ],
+        sources: [
+          { title: "大阪ガスによる「一般料金」の特徴｜都市ガス料金プランDB", url: "https://pps-net.org/gasplan/53471" },
+          { title: "関西（大阪ガスエリア）の都市ガス会社おすすめ＆料金比較ランキング", url: "https://selectra.jp/energy/citygas/kansai" }
+        ]
+      },
+      "携帯": {
+        note: "大手キャリアの主回線(docomo/au/softbank)は大容量プランで月7,000〜8,000円程度が相場。オンライン専用の格安プラン(ahamo/povo/LINEMO)や格安SIM(MVNO)に乗り換えると、同程度の使い方でも大きく下げられることが多い",
+        providers: [
+          { name: "ahamo(docomo)", summary: "30GB＋5分かけ放題で月2,970円" },
+          { name: "povo(au)", summary: "基本料金0円＋必要な分だけ「トッピング」を都度購入する方式。使う量が少ない月は安くなる" },
+          { name: "楽天モバイル", summary: "データ使い放題で月3,278円(段階制、使った分だけ)" },
+          { name: "mineo(格安SIM)", summary: "低速使い放題の「マイそく」なら月990円〜" },
+          { name: "IIJmio(格安SIM)", summary: "月850円〜と業界最安クラス。混雑時間帯は速度が落ちることがある" }
+        ],
+        sources: [
+          { title: "ahamo・povo・LINEMO・楽天モバイルを徹底比較", url: "https://my-best.com/18256" },
+          { title: "格安SIMおすすめ比較ランキング", url: "https://monster-mobile.jp/net-kaisen/kakuyasu-sim-osusume/" }
+        ]
+      }
+    }
+  };
+
+  // 摘要にこのキーワードが含まれる取引を、比較チェックの対象として拾うためのマッピング
+  var COMPARISON_KEYWORD_MAP = [
+    { keyword: "関西電力", category: "電力", providerName: "関西電力" },
+    { keyword: "kepco", category: "電力", providerName: "関西電力" },
+    { keyword: "looopでんき", category: "電力", providerName: "Looopでんき" },
+    { keyword: "eneosでんき", category: "電力", providerName: "ENEOSでんき" },
+    { keyword: "auでんき", category: "電力", providerName: "auでんき" },
+    { keyword: "大阪ガス", category: "ガス", providerName: "大阪ガス" },
+    { keyword: "エルピオ", category: "ガス", providerName: "エルピオ都市ガス" },
+    { keyword: "ドコモ", category: "携帯", providerName: "docomo" },
+    { keyword: "docomo", category: "携帯", providerName: "docomo" },
+    { keyword: "ahamo", category: "携帯", providerName: "ahamo" },
+    { keyword: "kddi", category: "携帯", providerName: "au" },
+    { keyword: "au携帯", category: "携帯", providerName: "au" },
+    { keyword: "povo", category: "携帯", providerName: "povo" },
+    { keyword: "ソフトバンク", category: "携帯", providerName: "ソフトバンク" },
+    { keyword: "softbank", category: "携帯", providerName: "ソフトバンク" },
+    { keyword: "linemo", category: "携帯", providerName: "LINEMO" },
+    { keyword: "楽天モバイル", category: "携帯", providerName: "楽天モバイル" },
+    { keyword: "ワイモバイル", category: "携帯", providerName: "ワイモバイル" },
+    { keyword: "uqモバイル", category: "携帯", providerName: "UQモバイル" },
+    { keyword: "mineo", category: "携帯", providerName: "mineo" },
+    { keyword: "iijmio", category: "携帯", providerName: "IIJmio" }
+  ];
+
   var SAMPLE_CSV =
     "日付,摘要,金額\n" +
     "2026-06-01,給与振込 カ)サンプル,280000\n" +
@@ -237,6 +337,8 @@
     "2026-06-03,セブンイレブン渋谷店,-680\n" +
     "2026-06-04,JR東日本 定期券,-12000\n" +
     "2026-06-05,NTTドコモ 携帯電話料金,-7200\n" +
+    "2026-06-06,関西電力 電気料金,-9800\n" +
+    "2026-06-07,大阪ガス ガス料金,-4200\n" +
     "2026-06-06,スターバックス 新宿店,-540\n" +
     "2026-06-08,Netflix月額,-1490\n" +
     "2026-06-10,イオン品川店,-4320\n" +
@@ -247,6 +349,8 @@
     "2026-07-02,家賃 サンプルマンション202,-85000\n" +
     "2026-07-05,ローソン渋谷2丁目店,-920\n" +
     "2026-07-05,NTTドコモ 携帯電話料金,-7200\n" +
+    "2026-07-06,関西電力 電気料金,-8600\n" +
+    "2026-07-07,大阪ガス ガス料金,-3900\n" +
     "2026-07-09,映画館 TOHOシネマズ,-1900\n" +
     "2026-07-14,ガソリンスタンド,-4500\n";
 
@@ -254,13 +358,20 @@
 
   var state = {
     rules: DEFAULT_RULES.slice(),
-    txns: [] // { date, desc, amount, category, manual }
+    txns: [], // { date, desc, amount, category, manual }
+    comparisonPlans: {}, // providerName -> ユーザーが入力した契約プラン名(任意)
+    comparisonLastChecked: null // 「比較を確認」ボタンを押した最終日付(ISO文字列)
   };
 
   // ---------- Persistence (localStorage) ----------
   function saveState() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ rules: state.rules, txns: state.txns }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        rules: state.rules,
+        txns: state.txns,
+        comparisonPlans: state.comparisonPlans,
+        comparisonLastChecked: state.comparisonLastChecked
+      }));
     } catch (e) {
       // 保存できなくても(プライベートブラウジング等)アプリ自体は動作を継続する
     }
@@ -278,6 +389,8 @@
       var parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.rules)) state.rules = parsed.rules;
       if (parsed && Array.isArray(parsed.txns)) state.txns = parsed.txns;
+      if (parsed && parsed.comparisonPlans && typeof parsed.comparisonPlans === "object") state.comparisonPlans = parsed.comparisonPlans;
+      if (parsed && typeof parsed.comparisonLastChecked === "string") state.comparisonLastChecked = parsed.comparisonLastChecked;
     } catch (e) {
       // 保存データが壊れている場合は初期状態のまま
     }
@@ -585,6 +698,101 @@
     });
   }
 
+  // ---------- Rendering: 固定費 見直しチェック ----------
+  function detectComparisonMatches() {
+    // "カテゴリ::事業者名" -> { category, providerName, amounts: [] }
+    var matches = {};
+    state.txns.forEach(function (t) {
+      if (t.amount >= 0) return; // 支出のみ対象
+      var lower = t.desc.toLowerCase();
+      for (var i = 0; i < COMPARISON_KEYWORD_MAP.length; i++) {
+        var m = COMPARISON_KEYWORD_MAP[i];
+        if (lower.indexOf(m.keyword.toLowerCase()) !== -1) {
+          var key = m.category + "::" + m.providerName;
+          if (!matches[key]) matches[key] = { category: m.category, providerName: m.providerName, amounts: [] };
+          matches[key].amounts.push(-t.amount);
+          break; // 最初に一致したマッピングだけ採用
+        }
+      }
+    });
+    return matches;
+  }
+
+  function renderComparisonCheck() {
+    var metaEl = document.getElementById("comparisonMeta");
+    if (metaEl) {
+      metaEl.textContent = "比較データ調査基準日: " + COMPARISON_DATA.researchedAt + "(ブラウザ内で完結するアプリのため自動更新はされません。古くなったら調べ直しを依頼してください)";
+    }
+    var lastCheckedEl = document.getElementById("comparisonLastChecked");
+    if (lastCheckedEl) {
+      lastCheckedEl.textContent = state.comparisonLastChecked ? ("最終確認日: " + state.comparisonLastChecked) : "まだ確認していません";
+    }
+
+    var matches = detectComparisonMatches();
+    var keys = Object.keys(matches);
+    var list = document.getElementById("comparisonList");
+    var emptyMsg = document.getElementById("comparisonEmptyMsg");
+    if (!list || !emptyMsg) return;
+    list.innerHTML = "";
+
+    if (!keys.length) {
+      emptyMsg.style.display = "block";
+      return;
+    }
+    emptyMsg.style.display = "none";
+
+    keys.sort().forEach(function (key) {
+      var m = matches[key];
+      var catData = COMPARISON_DATA.categories[m.category];
+      if (!catData) return;
+
+      var avg = m.amounts.reduce(function (a, b) { return a + b; }, 0) / m.amounts.length;
+      var card = createEl("div", "cmp-card");
+
+      card.appendChild(createEl("h3", null, m.category + ": " + m.providerName));
+      card.appendChild(createEl("div", "cmp-amount",
+        "検出した支払額: 平均 " + formatYen(avg) + " / 月(" + m.amounts.length + "件の取引から算出)"));
+      card.appendChild(createEl("div", "cmp-note", catData.note));
+
+      var planRow = createEl("div", "cmp-plan-input");
+      planRow.appendChild(createEl("span", null, "契約プラン(任意メモ):"));
+      var planInput = document.createElement("input");
+      planInput.type = "text";
+      planInput.placeholder = "例: ギガホプレミア";
+      planInput.value = state.comparisonPlans[m.providerName] || "";
+      planInput.addEventListener("change", function () {
+        state.comparisonPlans[m.providerName] = planInput.value;
+        saveState();
+      });
+      planRow.appendChild(planInput);
+      card.appendChild(planRow);
+
+      var providers = createEl("div", "cmp-providers");
+      catData.providers.forEach(function (p) {
+        var pEl = createEl("div", "cmp-provider");
+        pEl.appendChild(createEl("div", "name", p.name));
+        pEl.appendChild(createEl("div", null, p.summary));
+        providers.appendChild(pEl);
+      });
+      card.appendChild(providers);
+
+      var sources = createEl("div", "cmp-sources");
+      sources.appendChild(document.createTextNode("出典: "));
+      catData.sources.forEach(function (s, idx) {
+        if (idx > 0) sources.appendChild(document.createTextNode(" / "));
+        var a = document.createElement("a");
+        a.href = s.url;
+        a.textContent = s.title;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        sources.appendChild(a);
+      });
+      card.appendChild(sources);
+
+      list.appendChild(card);
+    });
+  }
+
   var CHART_EMPTY_MESSAGE = "データがありません";
   var CHART_EMPTY_FONT = "13px sans-serif";
   var CHART_EMPTY_COLOR = "#9ca3af";
@@ -690,6 +898,7 @@
     renderTable();
     renderMonthlySummary();
     renderStatsAndCharts();
+    renderComparisonCheck();
   }
 
   // ---------- File handling ----------
@@ -766,6 +975,16 @@
       saveState();
       setStatus("");
       renderAll();
+    });
+
+    document.getElementById("comparisonCheckBtn").addEventListener("click", function () {
+      var now = new Date();
+      var y = now.getFullYear();
+      var mo = String(now.getMonth() + 1).padStart(2, "0");
+      var d = String(now.getDate()).padStart(2, "0");
+      state.comparisonLastChecked = y + "-" + mo + "-" + d;
+      saveState();
+      renderComparisonCheck();
     });
 
     window.addEventListener("resize", renderStatsAndCharts);
