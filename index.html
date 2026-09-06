@@ -85,9 +85,21 @@
   .cmp-card h3 { margin: 0 0 4px; font-size: 0.95rem; }
   .cmp-card .cmp-amount { color: var(--muted); font-size: 0.85rem; margin-bottom: 8px; }
   .cmp-note { font-size: 0.83rem; color: var(--muted); margin-bottom: 10px; }
-  .cmp-providers { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-  .cmp-provider { background: var(--bg); border-radius: 6px; padding: 8px 10px; font-size: 0.85rem; }
+  .cmp-providers { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .cmp-provider { background: var(--bg); border-radius: 6px; font-size: 0.85rem; overflow: hidden; }
   .cmp-provider .name { font-weight: 600; margin-bottom: 2px; }
+  .cmp-provider-header {
+    cursor: pointer;
+    padding: 8px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+  }
+  .cmp-provider-header:hover { background: var(--border); }
+  .cmp-provider-header::after { content: "詳細 ▸"; color: var(--muted); font-weight: 400; font-size: 0.78rem; }
+  .cmp-provider-header.open::after { content: "詳細 ▾"; }
+  .cmp-provider-detail { padding: 0 10px 10px; color: var(--muted); }
   .cmp-plan-input { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
   .cmp-plan-input input { flex: 1; min-width: 160px; }
   .cmp-sources { font-size: 0.78rem; color: var(--muted); }
@@ -793,8 +805,16 @@
       var providers = createEl("div", "cmp-providers");
       catData.providers.forEach(function (p) {
         var pEl = createEl("div", "cmp-provider");
-        pEl.appendChild(createEl("div", "name", p.name));
-        pEl.appendChild(createEl("div", null, p.summary));
+        var header = createEl("div", "cmp-provider-header", p.name);
+        var detail = createEl("div", "cmp-provider-detail", p.summary);
+        detail.style.display = "none";
+        header.addEventListener("click", function () {
+          var opening = detail.style.display === "none";
+          detail.style.display = opening ? "block" : "none";
+          header.classList.toggle("open", opening);
+        });
+        pEl.appendChild(header);
+        pEl.appendChild(detail);
         providers.appendChild(pEl);
       });
       card.appendChild(providers);
