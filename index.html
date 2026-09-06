@@ -122,9 +122,18 @@
           <option value="Shift_JIS">Shift_JIS(多くの銀行CSVはこちら)</option>
         </select>
       </label>
+      <label>口座:
+        <input type="text" id="accountInput" list="accountOptions" placeholder="例: 楽天カード" style="width: 140px;">
+        <datalist id="accountOptions">
+          <option value="楽天カード">
+          <option value="ゆうちょ銀行">
+          <option value="JCBカード">
+        </datalist>
+      </label>
       <button type="button" class="secondary" id="sampleBtn">サンプルデータを試す</button>
       <button type="button" class="secondary" id="clearBtn">クリア</button>
     </div>
+    <p class="hint" style="margin-top:0;">口座を指定してからCSVを読み込むと、どの口座の取引かをあとから見分けられます(副業など、口座ごとに取引を分けて管理したい場合に活用してください)</p>
     <div class="dropzone" id="dropzone">
       <div>CSVファイルをここにドラッグ&ドロップ、またはクリックして選択</div>
       <div class="hint">想定列: 日付・摘要・金額(列名が見つからない場合は左から3列をこの順で使用します)</div>
@@ -157,6 +166,20 @@
       </table>
     </div>
     <div class="empty" id="monthlyEmptyMsg">CSVを読み込むと、ここに月次の収支が表示されます</div>
+  </div>
+
+  <div class="panel">
+    <h2>口座別の内訳</h2>
+    <p class="hint" style="margin-top:0;">アップロード時に指定した口座ごとの集計です。副業用の口座を分けて管理したい場合などに使ってください。</p>
+    <div class="table-wrap">
+      <table id="accountTable">
+        <thead>
+          <tr><th>口座</th><th>収入</th><th>支出</th><th>件数</th></tr>
+        </thead>
+        <tbody id="accountBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="accountEmptyMsg">CSVを読み込むと、ここに口座別の集計が表示されます</div>
   </div>
 
   <div class="panel">
@@ -196,7 +219,7 @@
     <div class="table-wrap">
       <table id="txnTable">
         <thead>
-          <tr><th>日付</th><th>摘要</th><th>金額</th><th>カテゴリ</th></tr>
+          <tr><th>日付</th><th>摘要</th><th>金額</th><th>カテゴリ</th><th>口座</th></tr>
         </thead>
         <tbody id="txnBody"></tbody>
       </table>
@@ -245,6 +268,7 @@
     { keyword: "KEPCO", category: "固定費" },
     { keyword: "Looopでんき", category: "固定費" },
     { keyword: "ENEOSでんき", category: "固定費" },
+    { keyword: "Japan電力", category: "固定費" },
     { keyword: "auでんき", category: "固定費" },
     { keyword: "大阪ガス", category: "固定費" },
     { keyword: "エルピオ", category: "固定費" },
@@ -285,10 +309,12 @@
         note: "電気代は世帯人数や使用量によって有利不利が変わります。一般に一人〜二人暮らしは大手電力(従量電灯)の方が安いことが多く、四人以上の世帯や日中不在が多い家庭は新電力(市場連動型等)が有利になりやすい傾向があります。(要確認: 具体的な差額は世帯・時期により変動)",
         providers: [
           { name: "関西電力(従量電灯A)", summary: "基本料金＋3段階の電力量料金＋燃料費調整額＋再エネ賦課金という伝統的な体系。料金が安定していてシンプル。一人〜二人暮らしなら新電力より安いことが多い" },
-          { name: "Looopでんき(スマートタイムONE)", summary: "基本料金0円、市場連動型で30分ごとに単価が変動。電気を使う時間を調整できる人・日中家を空けている人・使用量が多い世帯で有利になりやすい" }
+          { name: "Looopでんき(スマートタイムONE)", summary: "基本料金0円、市場連動型で30分ごとに単価が変動。電気を使う時間を調整できる人・日中家を空けている人・使用量が多い世帯で有利になりやすい" },
+          { name: "Japan電力(くらしプランS)", summary: "基本料金0円。電力量料金は250kWhまでが第1段階、それを超える第2段階から単価が安くなる仕組み(要確認: 具体的な円/kWh単価は公式サイトで要確認)。使用量が多い世帯ほど恩恵を受けやすい" }
         ],
         sources: [
-          { title: "関西電力とLooopでんき（ループでんき）を徹底比較", url: "https://enechange.jp/articles/kepco-looop-hikaku" }
+          { title: "関西電力とLooopでんき（ループでんき）を徹底比較", url: "https://enechange.jp/articles/kepco-looop-hikaku" },
+          { title: "Japan電力の電気料金シミュレーション｜評判・特徴も解説", url: "https://enechange.jp/utilities/japaden" }
         ]
       },
       "ガス": {
@@ -332,6 +358,8 @@
     { keyword: "kepco", category: "電力", providerName: "関西電力" },
     { keyword: "looopでんき", category: "電力", providerName: "Looopでんき" },
     { keyword: "eneosでんき", category: "電力", providerName: "ENEOSでんき" },
+    { keyword: "japan電力", category: "電力", providerName: "Japan電力" },
+    { keyword: "japaden", category: "電力", providerName: "Japan電力" },
     { keyword: "auでんき", category: "電力", providerName: "auでんき" },
     { keyword: "大阪ガス", category: "ガス", providerName: "大阪ガス" },
     { keyword: "エルピオ", category: "ガス", providerName: "エルピオ都市ガス" },
@@ -352,27 +380,31 @@
     { keyword: "日本通信", category: "携帯", providerName: "日本通信SIM" }
   ];
 
-  var SAMPLE_CSV =
+  // サンプルデータは口座別集計・重複除外の動作も確認できるよう、2口座に分けている
+  var SAMPLE_CSV_BANK =
     "日付,摘要,金額\n" +
     "2026-06-01,給与振込 カ)サンプル,280000\n" +
     "2026-06-02,家賃 サンプルマンション202,-85000\n" +
-    "2026-06-03,セブンイレブン渋谷店,-680\n" +
-    "2026-06-04,JR東日本 定期券,-12000\n" +
     "2026-06-05,NTTドコモ 携帯電話料金,-7200\n" +
     "2026-06-06,関西電力 電気料金,-9800\n" +
     "2026-06-07,大阪ガス ガス料金,-4200\n" +
+    "2026-07-01,給与振込 カ)サンプル,280000\n" +
+    "2026-07-02,家賃 サンプルマンション202,-85000\n" +
+    "2026-07-05,NTTドコモ 携帯電話料金,-7200\n" +
+    "2026-07-06,関西電力 電気料金,-8600\n" +
+    "2026-07-07,大阪ガス ガス料金,-3900\n";
+
+  var SAMPLE_CSV_CARD =
+    "日付,摘要,金額\n" +
+    "2026-06-03,セブンイレブン渋谷店,-680\n" +
+    "2026-06-04,JR東日本 定期券,-12000\n" +
     "2026-06-06,スターバックス 新宿店,-540\n" +
     "2026-06-08,Netflix月額,-1490\n" +
     "2026-06-10,イオン品川店,-4320\n" +
     "2026-06-12,タクシー代,-2100\n" +
     "2026-06-15,カラオケ館,-3200\n" +
     "2026-06-18,不明な支払い先ABC,-5000\n" +
-    "2026-07-01,給与振込 カ)サンプル,280000\n" +
-    "2026-07-02,家賃 サンプルマンション202,-85000\n" +
     "2026-07-05,ローソン渋谷2丁目店,-920\n" +
-    "2026-07-05,NTTドコモ 携帯電話料金,-7200\n" +
-    "2026-07-06,関西電力 電気料金,-8600\n" +
-    "2026-07-07,大阪ガス ガス料金,-3900\n" +
     "2026-07-09,映画館 TOHOシネマズ,-1900\n" +
     "2026-07-14,ガソリンスタンド,-4500\n";
 
@@ -477,13 +509,14 @@
     return n;
   }
 
-  // 同じ取引かどうかの判定キー(日付+摘要+金額が完全一致なら重複とみなす)
+  // 同じ取引かどうかの判定キー(日付+摘要+金額+口座が完全一致なら重複とみなす)
   function txnSignature(t) {
-    return t.date + "|" + t.desc + "|" + t.amount;
+    return t.date + "|" + t.desc + "|" + t.amount + "|" + (t.account || "");
   }
 
   function loadCSVText(text, options) {
     var mode = (options && options.mode) || "append"; // "append": 既存に追加(重複除外) / "replace": 全部入れ替え
+    var account = (options && options.account) || "";
     var rows = parseCSV(text).filter(function (r) { return r.some(function (f) { return f.trim() !== ""; }); });
     if (!rows.length) { setStatus("CSVにデータが見つかりませんでした", true); return; }
 
@@ -514,7 +547,7 @@
       if (isNaN(amount)) continue;
       var desc = (r[descIdx] || "").trim();
       var date = (r[dateIdx] || "").trim();
-      var txn = { date: date, desc: desc, amount: amount, category: categorize(desc, amount), manual: false };
+      var txn = { date: date, desc: desc, amount: amount, category: categorize(desc, amount), manual: false, account: account };
       var sig = txnSignature(txn);
       if (existingSignatures[sig]) { duplicateCount++; continue; } // 既存データまたは同じCSV内での重複
       existingSignatures[sig] = true;
@@ -533,7 +566,7 @@
     }
     saveState();
 
-    var msg = newTxns.length + " 件の取引を追加しました";
+    var msg = newTxns.length + " 件の取引を追加しました" + (account ? "(口座: " + account + ")" : "");
     if (duplicateCount > 0) msg += "(重複" + duplicateCount + "件は除外)";
     setStatus(msg);
     renderAll();
@@ -636,6 +669,8 @@
 
       var tdAmt = createEl("td", amountClass(t.amount), formatYen(t.amount));
 
+      var tdAccount = createEl("td", null, t.account || "(未指定)");
+
       var tdCat = document.createElement("td");
       var sel = document.createElement("select");
       sel.className = "cat-select";
@@ -657,6 +692,34 @@
       tr.appendChild(tdDesc);
       tr.appendChild(tdAmt);
       tr.appendChild(tdCat);
+      tr.appendChild(tdAccount);
+      body.appendChild(tr);
+    });
+  }
+
+  // ---------- Rendering: 口座別の内訳 ----------
+  function renderAccountSummary() {
+    var byAccount = {}; // 口座名 -> { income, expense, count }
+    state.txns.forEach(function (t) {
+      var acc = t.account || "(未指定)";
+      if (!byAccount[acc]) byAccount[acc] = { income: 0, expense: 0, count: 0 };
+      byAccount[acc].count++;
+      if (t.amount >= 0) byAccount[acc].income += t.amount;
+      else byAccount[acc].expense += -t.amount;
+    });
+
+    var accounts = Object.keys(byAccount).sort();
+    var body = document.getElementById("accountBody");
+    body.innerHTML = "";
+    document.getElementById("accountEmptyMsg").style.display = accounts.length ? "none" : "block";
+
+    accounts.forEach(function (acc) {
+      var row = byAccount[acc];
+      var tr = document.createElement("tr");
+      tr.appendChild(createEl("td", null, acc));
+      tr.appendChild(createEl("td", "amt-pos", formatYen(row.income)));
+      tr.appendChild(createEl("td", "amt-neg", formatYen(-row.expense)));
+      tr.appendChild(createEl("td", null, String(row.count)));
       body.appendChild(tr);
     });
   }
@@ -945,6 +1008,7 @@
     renderRules();
     renderTable();
     renderMonthlySummary();
+    renderAccountSummary();
     renderStatsAndCharts();
     renderComparisonCheck();
   }
@@ -952,12 +1016,13 @@
   // ---------- File handling ----------
   function readFile(file) {
     var encoding = document.getElementById("encodingSelect").value;
+    var account = document.getElementById("accountInput").value.trim();
     var reader = new FileReader();
     reader.onload = function () {
       try {
         var decoder = new TextDecoder(encoding);
         var text = decoder.decode(reader.result);
-        loadCSVText(text);
+        loadCSVText(text, { account: account });
       } catch (e) {
         setStatus("読み込みに失敗しました: " + e.message, true);
       }
@@ -1015,7 +1080,8 @@
     });
 
     document.getElementById("sampleBtn").addEventListener("click", function () {
-      loadCSVText(SAMPLE_CSV, { mode: "replace" });
+      loadCSVText(SAMPLE_CSV_BANK, { mode: "replace", account: "ゆうちょ銀行" });
+      loadCSVText(SAMPLE_CSV_CARD, { mode: "append", account: "楽天カード" });
     });
 
     document.getElementById("clearBtn").addEventListener("click", function () {
