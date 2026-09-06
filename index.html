@@ -116,6 +116,7 @@
     <div class="dropzone" id="dropzone">
       <div>CSVファイルをここにドラッグ&ドロップ、またはクリックして選択</div>
       <div class="hint">想定列: 日付・摘要・金額(列名が見つからない場合は左から3列をこの順で使用します)</div>
+      <div class="hint">複数のCSVを順番に読み込むと、既存のデータに追加されます(楽天カード・ゆうちょ・JCB等をまとめて取り込み可能)。日付・摘要・金額が完全一致する取引は重複として自動的に除外されます</div>
       <input type="file" id="fileInput" accept=".csv,text/csv">
     </div>
     <div class="hint" id="fileStatus"></div>
@@ -459,7 +460,13 @@
     return n;
   }
 
-  function loadCSVText(text) {
+  // 同じ取引かどうかの判定キー(日付+摘要+金額が完全一致なら重複とみなす)
+  function txnSignature(t) {
+    return t.date + "|" + t.desc + "|" + t.amount;
+  }
+
+  function loadCSVText(text, options) {
+    var mode = (options && options.mode) || "append"; // "append": 既存に追加(重複除外) / "replace": 全部入れ替え
     var rows = parseCSV(text).filter(function (r) { return r.some(function (f) { return f.trim() !== ""; }); });
     if (!rows.length) { setStatus("CSVにデータが見つかりませんでした", true); return; }
 
@@ -475,7 +482,14 @@
       dataRows = rows;
     }
 
+    // 重複判定用: replaceモードでは既存データを空とみなし、appendモードでは今のstate.txnsを基準にする
+    var existingSignatures = {};
+    if (mode === "append") {
+      state.txns.forEach(function (t) { existingSignatures[txnSignature(t)] = true; });
+    }
+
     var newTxns = [];
+    var duplicateCount = 0;
     for (var i = 0; i < dataRows.length; i++) {
       var r = dataRows[i];
       if (r.length <= Math.max(dateIdx, descIdx, amountIdx)) continue;
@@ -483,23 +497,28 @@
       if (isNaN(amount)) continue;
       var desc = (r[descIdx] || "").trim();
       var date = (r[dateIdx] || "").trim();
-      newTxns.push({
-        date: date,
-        desc: desc,
-        amount: amount,
-        category: categorize(desc, amount),
-        manual: false
-      });
+      var txn = { date: date, desc: desc, amount: amount, category: categorize(desc, amount), manual: false };
+      var sig = txnSignature(txn);
+      if (existingSignatures[sig]) { duplicateCount++; continue; } // 既存データまたは同じCSV内での重複
+      existingSignatures[sig] = true;
+      newTxns.push(txn);
     }
 
-    if (!newTxns.length) {
+    if (!newTxns.length && !duplicateCount) {
       setStatus("有効な取引が見つかりませんでした。列の並びや文字コードをご確認ください。", true);
       return;
     }
 
-    state.txns = newTxns;
+    if (mode === "replace") {
+      state.txns = newTxns;
+    } else {
+      state.txns = state.txns.concat(newTxns);
+    }
     saveState();
-    setStatus(newTxns.length + " 件の取引を読み込みました");
+
+    var msg = newTxns.length + " 件の取引を追加しました";
+    if (duplicateCount > 0) msg += "(重複" + duplicateCount + "件は除外)";
+    setStatus(msg);
     renderAll();
   }
 
@@ -971,7 +990,7 @@
     });
 
     document.getElementById("sampleBtn").addEventListener("click", function () {
-      loadCSVText(SAMPLE_CSV);
+      loadCSVText(SAMPLE_CSV, { mode: "replace" });
     });
 
     document.getElementById("clearBtn").addEventListener("click", function () {
