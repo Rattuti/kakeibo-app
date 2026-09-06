@@ -295,11 +295,13 @@
         note: "大阪ガスの「一般料金」は2026年9月30日で新規受付を終了し、10月1日以降は基本料金を引き上げた「一般料金S」に移行(標準家庭で月35円程度の負担増、11月請求分から適用)。乗り換え先の候補として、大阪ガスエリア対応の新規ガス会社の方が安いケースがある",
         providers: [
           { name: "大阪ガス(一般料金→一般料金S)", summary: "2026年10月以降の新規契約は基本料金が値上げされた「一般料金S」になる" },
-          { name: "エルピオ都市ガス", summary: "大阪ガスエリア対応の新規ガス会社。一人暮らし世帯で月3,208円という比較的安い料金例あり(要確認: 世帯人数・使用量で変動)" }
+          { name: "エルピオ都市ガス", summary: "大阪ガスエリア対応の新規ガス会社。一人暮らし世帯で月3,208円という比較的安い料金例あり(要確認: 世帯人数・使用量で変動)" },
+          { name: "関西電力ガス(なっトクプラン)", summary: "基本料金・従量料金とも大阪ガス「一般料金」より安く設定(30m³使用で月587円程度お得)。電気とセットの「なっトクパック」ならさらにお得(年間5,900〜9,000円程度)。ただし燃料価格の上限がないため、燃料高騰時は大阪ガスより高くなる可能性がある点に注意" }
         ],
         sources: [
           { title: "大阪ガスによる「一般料金」の特徴｜都市ガス料金プランDB", url: "https://pps-net.org/gasplan/53471" },
-          { title: "関西（大阪ガスエリア）の都市ガス会社おすすめ＆料金比較ランキング", url: "https://selectra.jp/energy/citygas/kansai" }
+          { title: "関西（大阪ガスエリア）の都市ガス会社おすすめ＆料金比較ランキング", url: "https://selectra.jp/energy/citygas/kansai" },
+          { title: "関電ガスのなっトクプラン：大阪ガスとの料金比較まとめ", url: "https://selectra.jp/energy/kaisha/kepcogas" }
         ]
       },
       "携帯": {
@@ -323,6 +325,9 @@
 
   // 摘要にこのキーワードが含まれる取引を、比較チェックの対象として拾うためのマッピング
   var COMPARISON_KEYWORD_MAP = [
+    { keyword: "関西電力ガス", category: "ガス", providerName: "関西電力ガス" },
+    { keyword: "関電ガス", category: "ガス", providerName: "関西電力ガス" },
+    { keyword: "なっトク", category: "ガス", providerName: "関西電力ガス" },
     { keyword: "関西電力", category: "電力", providerName: "関西電力" },
     { keyword: "kepco", category: "電力", providerName: "関西電力" },
     { keyword: "looopでんき", category: "電力", providerName: "Looopでんき" },
