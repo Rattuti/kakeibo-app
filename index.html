@@ -13,11 +13,6 @@
     --muted: #6b7280;
     --accent: #3d5a80;
     --danger: #c0392b;
-    --food: #e07a5f;
-    --rent: #3d5a80;
-    --transit: #81b29a;
-    --fun: #f2cc8f;
-    --other: #9b9b9b;
     --income: #588157;
   }
   * { box-sizing: border-box; }
@@ -50,7 +45,6 @@
   .dropzone.drag { border-color: var(--accent); background: #eef2f7; }
   .dropzone input { display: none; }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .row.between { justify-content: space-between; }
   select, input[type=text], button {
     font: inherit;
     padding: 6px 10px;
@@ -61,7 +55,6 @@
   button { cursor: pointer; background: var(--accent); color: #fff; border: none; }
   button:hover { opacity: 0.9; }
   button.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
-  button.danger-btn { background: var(--danger); }
   .hint { font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 8px; }
   .stat { background: var(--bg); border-radius: 8px; padding: 12px 14px; }
@@ -94,7 +87,7 @@
 <div class="layout">
   <div>
     <h1>家計簿アプリ</h1>
-    <p class="subtitle">銀行の取引明細CSVを読み込んで、自動でカテゴリ分類・集計します(データは保存されず、ブラウザ内メモリのみで完結します)</p>
+    <p class="subtitle">銀行の取引明細CSVを読み込んで、自動でカテゴリ分類・集計します(データはこのブラウザ内にのみ保存され、外部には送信されません)</p>
   </div>
 
   <div class="panel">
@@ -129,7 +122,21 @@
   </div>
 
   <div class="panel">
-    <h2>集計</h2>
+    <h2>月次の総合収支</h2>
+    <p class="hint" style="margin-top:0;">カテゴリ分けとは別に、月ごとの収入・支出・収支をまとめたものです。</p>
+    <div class="table-wrap">
+      <table id="monthlyTable">
+        <thead>
+          <tr><th>月</th><th>収入</th><th>支出</th><th>収支</th></tr>
+        </thead>
+        <tbody id="monthlyBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="monthlyEmptyMsg">CSVを読み込むと、ここに月次の収支が表示されます</div>
+  </div>
+
+  <div class="panel">
+    <h2>仕分(カテゴリ別集計)</h2>
     <div class="stats">
       <div class="stat"><div class="label">総収入</div><div class="value amt-pos" id="statIncome">¥0</div></div>
       <div class="stat"><div class="label">総支出</div><div class="value amt-neg" id="statExpense">¥0</div></div>
@@ -167,20 +174,34 @@
 (function () {
   "use strict";
 
-  var CATEGORIES = ["食費", "家賃", "交通費", "娯楽", "その他", "収入"];
+  var CATEGORY_OTHER = "その他";
+  var CATEGORY_INCOME = "収入";
+  var CATEGORIES = ["食費", "固定費", "交通費", "娯楽", CATEGORY_OTHER, CATEGORY_INCOME];
   var CATEGORY_COLORS = {
     "食費": "#e07a5f",
-    "家賃": "#3d5a80",
+    "固定費": "#3d5a80",
     "交通費": "#81b29a",
-    "娯楽": "#f2cc8f",
-    "その他": "#9b9b9b",
-    "収入": "#588157"
+    "娯楽": "#f2cc8f"
   };
+  CATEGORY_COLORS[CATEGORY_OTHER] = "#9b9b9b";
+  CATEGORY_COLORS[CATEGORY_INCOME] = "#588157";
 
   var DEFAULT_RULES = [
-    { keyword: "家賃", category: "家賃" },
-    { keyword: "マンション", category: "家賃" },
-    { keyword: "不動産", category: "家賃" },
+    { keyword: "家賃", category: "固定費" },
+    { keyword: "マンション", category: "固定費" },
+    { keyword: "不動産", category: "固定費" },
+    { keyword: "ドコモ", category: "固定費" },
+    { keyword: "NTTドコモ", category: "固定費" },
+    { keyword: "docomo", category: "固定費" },
+    { keyword: "KDDI", category: "固定費" },
+    { keyword: "au携帯", category: "固定費" },
+    { keyword: "ソフトバンク", category: "固定費" },
+    { keyword: "softbank", category: "固定費" },
+    { keyword: "楽天モバイル", category: "固定費" },
+    { keyword: "ワイモバイル", category: "固定費" },
+    { keyword: "UQモバイル", category: "固定費" },
+    { keyword: "mineo", category: "固定費" },
+    { keyword: "IIJmio", category: "固定費" },
     { keyword: "スーパー", category: "食費" },
     { keyword: "コンビニ", category: "食費" },
     { keyword: "セブン", category: "食費" },
@@ -215,6 +236,7 @@
     "2026-06-02,家賃 サンプルマンション202,-85000\n" +
     "2026-06-03,セブンイレブン渋谷店,-680\n" +
     "2026-06-04,JR東日本 定期券,-12000\n" +
+    "2026-06-05,NTTドコモ 携帯電話料金,-7200\n" +
     "2026-06-06,スターバックス 新宿店,-540\n" +
     "2026-06-08,Netflix月額,-1490\n" +
     "2026-06-10,イオン品川店,-4320\n" +
@@ -224,13 +246,42 @@
     "2026-07-01,給与振込 カ)サンプル,280000\n" +
     "2026-07-02,家賃 サンプルマンション202,-85000\n" +
     "2026-07-05,ローソン渋谷2丁目店,-920\n" +
+    "2026-07-05,NTTドコモ 携帯電話料金,-7200\n" +
     "2026-07-09,映画館 TOHOシネマズ,-1900\n" +
     "2026-07-14,ガソリンスタンド,-4500\n";
+
+  var STORAGE_KEY = "kakeibo-app-state-v1";
 
   var state = {
     rules: DEFAULT_RULES.slice(),
     txns: [] // { date, desc, amount, category, manual }
   };
+
+  // ---------- Persistence (localStorage) ----------
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ rules: state.rules, txns: state.txns }));
+    } catch (e) {
+      // 保存できなくても(プライベートブラウジング等)アプリ自体は動作を継続する
+    }
+  }
+
+  function loadState() {
+    var raw;
+    try {
+      raw = localStorage.getItem(STORAGE_KEY);
+    } catch (e) {
+      return;
+    }
+    if (!raw) return;
+    try {
+      var parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.rules)) state.rules = parsed.rules;
+      if (parsed && Array.isArray(parsed.txns)) state.txns = parsed.txns;
+    } catch (e) {
+      // 保存データが壊れている場合は初期状態のまま
+    }
+  }
 
   // ---------- CSV parsing ----------
   function parseCSV(text) {
@@ -330,6 +381,7 @@
     }
 
     state.txns = newTxns;
+    saveState();
     setStatus(newTxns.length + " 件の取引を読み込みました");
     renderAll();
   }
@@ -342,13 +394,13 @@
 
   // ---------- Categorization ----------
   function categorize(desc, amount) {
-    if (amount >= 0) return "収入";
+    if (amount >= 0) return CATEGORY_INCOME;
     var lower = desc.toLowerCase();
     for (var i = 0; i < state.rules.length; i++) {
       var kw = state.rules[i].keyword.toLowerCase();
       if (kw && lower.indexOf(kw) !== -1) return state.rules[i].category;
     }
-    return "その他";
+    return CATEGORY_OTHER;
   }
 
   function reapplyRulesToAuto() {
@@ -357,12 +409,24 @@
     });
   }
 
+  // ---------- DOM helpers ----------
+  function createEl(tag, className, text) {
+    var el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text !== undefined) el.textContent = text;
+    return el;
+  }
+
+  function amountClass(n) {
+    return n >= 0 ? "amt-pos" : "amt-neg";
+  }
+
   // ---------- Rendering: rules ----------
   function renderRuleCategoryOptions(select) {
     select.innerHTML = "";
-    CATEGORIES.filter(function (c) { return c !== "収入"; }).forEach(function (c) {
-      var opt = document.createElement("option");
-      opt.value = c; opt.textContent = c;
+    CATEGORIES.filter(function (c) { return c !== CATEGORY_INCOME; }).forEach(function (c) {
+      var opt = createEl("option", null, c);
+      opt.value = c;
       select.appendChild(opt);
     });
   }
@@ -371,32 +435,23 @@
     var list = document.getElementById("rulesList");
     list.innerHTML = "";
     if (!state.rules.length) {
-      var empty = document.createElement("div");
-      empty.className = "hint";
-      empty.textContent = "ルールがありません。すべて「その他」に分類されます。";
-      list.appendChild(empty);
+      list.appendChild(createEl("div", "hint", "ルールがありません。すべて「その他」に分類されます。"));
       return;
     }
     state.rules.forEach(function (rule, idx) {
-      var item = document.createElement("div");
-      item.className = "rule-item";
+      var item = createEl("div", "rule-item");
 
-      var badge = document.createElement("span");
-      badge.className = "badge";
+      var badge = createEl("span", "badge", rule.category);
       badge.style.background = CATEGORY_COLORS[rule.category] || "#999";
-      badge.textContent = rule.category;
 
-      var kw = document.createElement("span");
-      kw.className = "kw";
-      kw.textContent = rule.keyword;
+      var kw = createEl("span", "kw", rule.keyword);
 
-      var rm = document.createElement("button");
-      rm.className = "rm";
+      var rm = createEl("button", "rm", "✕");
       rm.type = "button";
-      rm.textContent = "✕";
       rm.addEventListener("click", function () {
         state.rules.splice(idx, 1);
         reapplyRulesToAuto();
+        saveState();
         renderAll();
       });
 
@@ -419,32 +474,28 @@
     var emptyMsg = document.getElementById("emptyMsg");
     emptyMsg.style.display = state.txns.length ? "none" : "block";
 
-    state.txns.forEach(function (t, idx) {
+    state.txns.forEach(function (t) {
       var tr = document.createElement("tr");
 
-      var tdDate = document.createElement("td");
-      tdDate.textContent = t.date;
+      var tdDate = createEl("td", null, t.date);
 
-      var tdDesc = document.createElement("td");
-      tdDesc.className = "desc";
-      tdDesc.textContent = t.desc;
+      var tdDesc = createEl("td", "desc", t.desc);
 
-      var tdAmt = document.createElement("td");
-      tdAmt.textContent = formatYen(t.amount);
-      tdAmt.className = t.amount >= 0 ? "amt-pos" : "amt-neg";
+      var tdAmt = createEl("td", amountClass(t.amount), formatYen(t.amount));
 
       var tdCat = document.createElement("td");
       var sel = document.createElement("select");
       sel.className = "cat-select";
       CATEGORIES.forEach(function (c) {
-        var opt = document.createElement("option");
-        opt.value = c; opt.textContent = c;
+        var opt = createEl("option", null, c);
+        opt.value = c;
         if (c === t.category) opt.selected = true;
         sel.appendChild(opt);
       });
       sel.addEventListener("change", function () {
         t.category = sel.value;
         t.manual = true;
+        saveState();
         renderStatsAndCharts();
       });
       tdCat.appendChild(sel);
@@ -453,6 +504,34 @@
       tr.appendChild(tdDesc);
       tr.appendChild(tdAmt);
       tr.appendChild(tdCat);
+      body.appendChild(tr);
+    });
+  }
+
+  // ---------- Rendering: monthly summary ----------
+  function renderMonthlySummary() {
+    var monthly = {}; // "YYYY-MM" -> { income, expense }
+    state.txns.forEach(function (t) {
+      var month = (t.date.match(/^\d{4}-\d{2}/) || [t.date.slice(0, 7)])[0];
+      if (!monthly[month]) monthly[month] = { income: 0, expense: 0 };
+      if (t.amount >= 0) monthly[month].income += t.amount;
+      else monthly[month].expense += -t.amount;
+    });
+
+    var months = Object.keys(monthly).sort();
+    var body = document.getElementById("monthlyBody");
+    body.innerHTML = "";
+    document.getElementById("monthlyEmptyMsg").style.display = months.length ? "none" : "block";
+
+    months.forEach(function (m) {
+      var income = monthly[m].income;
+      var expense = monthly[m].expense;
+      var net = income - expense;
+      var tr = document.createElement("tr");
+      tr.appendChild(createEl("td", null, m));
+      tr.appendChild(createEl("td", "amt-pos", formatYen(income)));
+      tr.appendChild(createEl("td", "amt-neg", formatYen(-expense)));
+      tr.appendChild(createEl("td", amountClass(net), formatYen(net)));
       body.appendChild(tr);
     });
   }
@@ -479,7 +558,7 @@
     var net = income - expense;
     var netEl = document.getElementById("statNet");
     netEl.textContent = formatYen(net);
-    netEl.className = "value " + (net >= 0 ? "amt-pos" : "amt-neg");
+    netEl.className = "value " + amountClass(net);
     document.getElementById("statCount").textContent = state.txns.length;
 
     var months = Object.keys(monthTotals).sort();
@@ -495,18 +574,30 @@
     legend.innerHTML = "";
     if (!cats.length) return;
     cats.forEach(function (c) {
-      var item = document.createElement("div");
-      item.className = "legend-item";
-      var sw = document.createElement("span");
-      sw.className = "swatch";
+      var item = createEl("div", "legend-item");
+      var sw = createEl("span", "swatch");
       sw.style.background = CATEGORY_COLORS[c] || "#999";
       var pct = total > 0 ? (catTotals[c] / total * 100).toFixed(1) : "0.0";
-      var label = document.createElement("span");
-      label.textContent = c + "  " + formatYen(catTotals[c]) + " (" + pct + "%)";
+      var label = createEl("span", null, c + "  " + formatYen(catTotals[c]) + " (" + pct + "%)");
       item.appendChild(sw);
       item.appendChild(label);
       legend.appendChild(item);
     });
+  }
+
+  var CHART_EMPTY_MESSAGE = "データがありません";
+  var CHART_EMPTY_FONT = "13px sans-serif";
+  var CHART_EMPTY_COLOR = "#9ca3af";
+  var CHART_GRID_COLOR = "#e2e5ea";
+  var CHART_AXIS_LABEL_COLOR = "#6b7280";
+  var CHART_BAR_COLOR = "#3d5a80";
+  var CHART_BAR_LABEL_COLOR = "#374151";
+
+  function drawEmptyChartMessage(ctx, w, h) {
+    ctx.fillStyle = CHART_EMPTY_COLOR;
+    ctx.font = CHART_EMPTY_FONT;
+    ctx.textAlign = "center";
+    ctx.fillText(CHART_EMPTY_MESSAGE, w / 2, h / 2);
   }
 
   function setupCanvas(canvas) {
@@ -526,10 +617,7 @@
     var setup = setupCanvas(canvas);
     var ctx = setup.ctx, w = setup.w, h = setup.h;
     if (!labels.length) {
-      ctx.fillStyle = "#9ca3af";
-      ctx.font = "13px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("データがありません", w / 2, h / 2);
+      drawEmptyChartMessage(ctx, w, h);
       return;
     }
     var padLeft = 60, padBottom = 30, padTop = 12, padRight = 12;
@@ -538,8 +626,8 @@
     var maxVal = Math.max.apply(null, values) || 1;
 
     // grid + y labels
-    ctx.strokeStyle = "#e2e5ea";
-    ctx.fillStyle = "#6b7280";
+    ctx.strokeStyle = CHART_GRID_COLOR;
+    ctx.fillStyle = CHART_AXIS_LABEL_COLOR;
     ctx.font = "11px sans-serif";
     ctx.textAlign = "right";
     var steps = 4;
@@ -555,15 +643,14 @@
 
     var barSlot = chartW / labels.length;
     var barWidth = Math.min(48, barSlot * 0.6);
-    ctx.fillStyle = "#3d5a80";
     ctx.textAlign = "center";
     for (var i = 0; i < labels.length; i++) {
       var barH = maxVal > 0 ? (values[i] / maxVal) * chartH : 0;
       var x = padLeft + barSlot * i + (barSlot - barWidth) / 2;
       var y2 = padTop + chartH - barH;
-      ctx.fillStyle = "#3d5a80";
+      ctx.fillStyle = CHART_BAR_COLOR;
       ctx.fillRect(x, y2, barWidth, barH);
-      ctx.fillStyle = "#374151";
+      ctx.fillStyle = CHART_BAR_LABEL_COLOR;
       ctx.fillText(labels[i], x + barWidth / 2, padTop + chartH + 18);
     }
   }
@@ -575,10 +662,7 @@
     var cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2 - 10;
 
     if (!labels.length || total <= 0) {
-      ctx.fillStyle = "#9ca3af";
-      ctx.font = "13px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("データがありません", w / 2, h / 2);
+      drawEmptyChartMessage(ctx, w, h);
       return;
     }
 
@@ -604,6 +688,7 @@
   function renderAll() {
     renderRules();
     renderTable();
+    renderMonthlySummary();
     renderStatsAndCharts();
   }
 
@@ -628,7 +713,11 @@
 
   // ---------- Init / events ----------
   function init() {
-    renderRuleCategoryOptions(document.getElementById("ruleCategory"));
+    loadState();
+    var ruleCategorySelect = document.getElementById("ruleCategory");
+    var ruleKeywordInput = document.getElementById("ruleKeyword");
+    var addRuleBtn = document.getElementById("addRuleBtn");
+    renderRuleCategoryOptions(ruleCategorySelect);
 
     var dropzone = document.getElementById("dropzone");
     var fileInput = document.getElementById("fileInput");
@@ -655,18 +744,17 @@
       if (files && files.length) readFile(files[0]);
     });
 
-    document.getElementById("addRuleBtn").addEventListener("click", function () {
-      var kwInput = document.getElementById("ruleKeyword");
-      var catSelect = document.getElementById("ruleCategory");
-      var kw = kwInput.value.trim();
+    addRuleBtn.addEventListener("click", function () {
+      var kw = ruleKeywordInput.value.trim();
       if (!kw) return;
-      state.rules.unshift({ keyword: kw, category: catSelect.value });
-      kwInput.value = "";
+      state.rules.unshift({ keyword: kw, category: ruleCategorySelect.value });
+      ruleKeywordInput.value = "";
       reapplyRulesToAuto();
+      saveState();
       renderAll();
     });
-    document.getElementById("ruleKeyword").addEventListener("keydown", function (e) {
-      if (e.key === "Enter") document.getElementById("addRuleBtn").click();
+    ruleKeywordInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") addRuleBtn.click();
     });
 
     document.getElementById("sampleBtn").addEventListener("click", function () {
@@ -675,12 +763,14 @@
 
     document.getElementById("clearBtn").addEventListener("click", function () {
       state.txns = [];
+      saveState();
       setStatus("");
       renderAll();
     });
 
     window.addEventListener("resize", renderStatsAndCharts);
 
+    if (state.txns.length) setStatus("前回保存したデータを読み込みました(" + state.txns.length + " 件)");
     renderAll();
   }
 
