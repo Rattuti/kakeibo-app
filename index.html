@@ -134,7 +134,7 @@
       <button type="button" class="secondary" id="clearBtn">クリア</button>
     </div>
     <p class="hint" style="margin-top:0;">口座を指定してからCSVを読み込むと、どの口座の取引かをあとから見分けられます(副業など、口座ごとに取引を分けて管理したい場合に活用してください)</p>
-    <div class="dropzone" id="dropzone">
+    <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="CSVファイルを選択">
       <div>CSVファイルをここにドラッグ&ドロップ、またはクリックして選択</div>
       <div class="hint">想定列: 日付・摘要・金額(列名が見つからない場合は左から3列をこの順で使用します)</div>
       <div class="hint">複数のCSVを順番に読み込むと、既存のデータに追加されます(楽天カード・ゆうちょ・JCB等をまとめて取り込み可能)。日付・摘要・金額が完全一致する取引は重複として自動的に除外されます</div>
@@ -193,11 +193,11 @@
     <div class="charts">
       <div>
         <div class="hint" style="margin-bottom:6px;">月別支出推移</div>
-        <canvas id="barChart" height="220"></canvas>
+        <canvas id="barChart" height="220" role="img" aria-label="月別支出推移グラフ"></canvas>
       </div>
       <div>
         <div class="hint" style="margin-bottom:6px;">カテゴリ別支出内訳</div>
-        <canvas id="pieChart" height="220"></canvas>
+        <canvas id="pieChart" height="220" role="img" aria-label="カテゴリ別支出内訳グラフ"></canvas>
         <div class="legend" id="pieLegend"></div>
       </div>
     </div>
@@ -634,6 +634,7 @@
 
       var rm = createEl("button", "rm", "✕");
       rm.type = "button";
+      rm.setAttribute("aria-label", "「" + rule.keyword + "」のルールを削除");
       rm.addEventListener("click", function () {
         state.rules.splice(idx, 1);
         reapplyRulesToAuto();
@@ -1062,6 +1063,12 @@
     var fileInput = document.getElementById("fileInput");
 
     dropzone.addEventListener("click", function () { fileInput.click(); });
+    dropzone.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        fileInput.click();
+      }
+    });
     fileInput.addEventListener("change", function () {
       if (fileInput.files.length) readFile(fileInput.files[0]);
     });
@@ -1097,6 +1104,7 @@
     });
 
     document.getElementById("sampleBtn").addEventListener("click", function () {
+      if (state.txns.length && !window.confirm("サンプルデータを読み込むと、現在の取引データは置き換えられます。よろしいですか?(この操作は元に戻せません)")) return;
       loadCSVText(SAMPLE_CSV_BANK, { mode: "replace", account: "ゆうちょ銀行" });
       loadCSVText(SAMPLE_CSV_CARD, { mode: "append", account: "楽天カード" });
       // 上の2回の読み込みで個別のステータスメッセージが上書きされてしまうため、まとめて表示し直す
@@ -1107,7 +1115,7 @@
       if (state.txns.length && !window.confirm("すべての取引データを削除します。よろしいですか?(この操作は元に戻せません)")) return;
       state.txns = [];
       saveState();
-      setStatus("");
+      setStatus("取引データを削除しました");
       renderAll();
     });
 
