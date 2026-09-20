@@ -147,8 +147,8 @@
     <h2>2. 分類ルール</h2>
     <div class="rules-list" id="rulesList"></div>
     <div class="row">
-      <input type="text" id="ruleKeyword" placeholder="キーワード(例: スターバックス)">
-      <select id="ruleCategory"></select>
+      <input type="text" id="ruleKeyword" placeholder="キーワード(例: スターバックス)" aria-label="分類ルールのキーワード">
+      <select id="ruleCategory" aria-label="分類ルールのカテゴリ"></select>
       <button type="button" id="addRuleBtn">ルール追加</button>
     </div>
     <p class="hint">摘要にキーワードが含まれる場合、上のリストの上から順に最初に一致したカテゴリが適用されます。金額が0以上の取引は自動的に「収入」になります。</p>
@@ -160,7 +160,7 @@
     <div class="table-wrap">
       <table id="monthlyTable">
         <thead>
-          <tr><th>月</th><th>収入</th><th>支出</th><th>収支</th></tr>
+          <tr><th scope="col">月</th><th scope="col">収入</th><th scope="col">支出</th><th scope="col">収支</th></tr>
         </thead>
         <tbody id="monthlyBody"></tbody>
       </table>
@@ -174,7 +174,7 @@
     <div class="table-wrap">
       <table id="accountTable">
         <thead>
-          <tr><th>口座</th><th>収入</th><th>支出</th><th>件数</th></tr>
+          <tr><th scope="col">口座</th><th scope="col">収入</th><th scope="col">支出</th><th scope="col">件数</th></tr>
         </thead>
         <tbody id="accountBody"></tbody>
       </table>
@@ -219,7 +219,7 @@
     <div class="table-wrap">
       <table id="txnTable">
         <thead>
-          <tr><th>日付</th><th>摘要</th><th>金額</th><th>カテゴリ</th><th>口座</th></tr>
+          <tr><th scope="col">日付</th><th scope="col">摘要</th><th scope="col">金額</th><th scope="col">カテゴリ</th><th scope="col">口座</th></tr>
         </thead>
         <tbody id="txnBody"></tbody>
       </table>
@@ -863,6 +863,7 @@
       var planInput = document.createElement("input");
       planInput.type = "text";
       planInput.placeholder = "例: ギガホプレミア";
+      planInput.setAttribute("aria-label", m.providerName + "の契約プランメモ");
       planInput.value = state.comparisonPlans[m.providerName] || "";
       planInput.addEventListener("change", function () {
         state.comparisonPlans[m.providerName] = planInput.value;
