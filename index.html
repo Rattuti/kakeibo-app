@@ -865,11 +865,17 @@
       planInput.placeholder = "例: ギガホプレミア";
       planInput.setAttribute("aria-label", m.providerName + "の契約プランメモ");
       planInput.value = state.comparisonPlans[m.providerName] || "";
+      var planSaved = createEl("span", "hint", "");
+      planSaved.style.margin = "0";
       planInput.addEventListener("change", function () {
         state.comparisonPlans[m.providerName] = planInput.value;
         saveState();
+        planSaved.textContent = "保存しました";
+        clearTimeout(planSaved._t);
+        planSaved._t = setTimeout(function () { planSaved.textContent = ""; }, 2000);
       });
       planRow.appendChild(planInput);
+      planRow.appendChild(planSaved);
       card.appendChild(planRow);
 
       var providers = createEl("div", "cmp-providers");
