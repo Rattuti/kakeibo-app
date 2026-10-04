@@ -140,7 +140,7 @@
       <div class="hint">複数のCSVを順番に読み込むと、既存のデータに追加されます(楽天カード・ゆうちょ・JCB等をまとめて取り込み可能)。日付・摘要・金額が完全一致する取引は重複として自動的に除外されます</div>
       <input type="file" id="fileInput" accept=".csv,text/csv">
     </div>
-    <div class="hint" id="fileStatus"></div>
+    <div class="hint" id="fileStatus" aria-live="polite"></div>
   </div>
 
   <div class="panel">
@@ -867,6 +867,7 @@
       planInput.value = state.comparisonPlans[m.providerName] || "";
       var planSaved = createEl("span", "hint", "");
       planSaved.style.margin = "0";
+      planSaved.setAttribute("aria-live", "polite");
       planInput.addEventListener("change", function () {
         state.comparisonPlans[m.providerName] = planInput.value;
         saveState();
@@ -882,12 +883,23 @@
       catData.providers.forEach(function (p) {
         var pEl = createEl("div", "cmp-provider");
         var header = createEl("div", "cmp-provider-header", p.name);
+        header.setAttribute("role", "button");
+        header.setAttribute("tabindex", "0");
+        header.setAttribute("aria-expanded", "false");
         var detail = createEl("div", "cmp-provider-detail", p.summary);
         detail.style.display = "none";
-        header.addEventListener("click", function () {
+        var toggleDetail = function () {
           var opening = detail.style.display === "none";
           detail.style.display = opening ? "block" : "none";
           header.classList.toggle("open", opening);
+          header.setAttribute("aria-expanded", opening ? "true" : "false");
+        };
+        header.addEventListener("click", toggleDetail);
+        header.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggleDetail();
+          }
         });
         pEl.appendChild(header);
         pEl.appendChild(detail);
