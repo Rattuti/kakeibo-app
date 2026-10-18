@@ -150,6 +150,7 @@
       <input type="text" id="ruleKeyword" placeholder="キーワード(例: スターバックス)" aria-label="分類ルールのキーワード">
       <select id="ruleCategory" aria-label="分類ルールのカテゴリ"></select>
       <button type="button" id="addRuleBtn">ルール追加</button>
+      <span class="hint" id="ruleFeedback" aria-live="polite" style="margin-top:0;"></span>
     </div>
     <p class="hint">摘要にキーワードが含まれる場合、上のリストの上から順に最初に一致したカテゴリが適用されます。金額が0以上の取引は自動的に「収入」になります。</p>
   </div>
@@ -566,8 +567,13 @@
     }
     saveState();
 
-    var msg = newTxns.length + " 件の取引を追加しました" + (account ? "(口座: " + account + ")" : "");
-    if (duplicateCount > 0) msg += "(重複" + duplicateCount + "件は除外)";
+    var msg;
+    if (newTxns.length === 0) {
+      msg = "新しい取引はありませんでした(" + duplicateCount + "件はすべて既存データと重複のため除外)";
+    } else {
+      msg = newTxns.length + " 件の取引を追加しました" + (account ? "(口座: " + account + ")" : "");
+      if (duplicateCount > 0) msg += "(重複" + duplicateCount + "件は除外)";
+    }
     setStatus(msg);
     renderAll();
   }
@@ -926,7 +932,7 @@
 
   var CHART_EMPTY_MESSAGE = "データがありません";
   var CHART_EMPTY_FONT = "13px sans-serif";
-  var CHART_EMPTY_COLOR = "#9ca3af";
+  var CHART_EMPTY_COLOR = "#6b7280"; // 元は#9ca3afで白背景とのコントラスト比2.5:1と低く読みにくかったため、既存の--mutedと同色に統一(4.5:1超)
   var CHART_GRID_COLOR = "#e2e5ea";
   var CHART_AXIS_LABEL_COLOR = "#6b7280";
   var CHART_BAR_COLOR = "#3d5a80";
@@ -1109,9 +1115,18 @@
       if (files && files.length) readFile(files[0]);
     });
 
+    var ruleFeedback = document.getElementById("ruleFeedback");
     addRuleBtn.addEventListener("click", function () {
       var kw = ruleKeywordInput.value.trim();
-      if (!kw) return;
+      if (!kw) {
+        if (ruleFeedback) {
+          ruleFeedback.textContent = "キーワードを入力してください";
+          ruleFeedback.style.color = "var(--danger)";
+        }
+        ruleKeywordInput.focus();
+        return;
+      }
+      if (ruleFeedback) { ruleFeedback.textContent = ""; ruleFeedback.style.color = ""; }
       state.rules.unshift({ keyword: kw, category: ruleCategorySelect.value });
       ruleKeywordInput.value = "";
       reapplyRulesToAuto();
