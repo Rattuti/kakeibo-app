@@ -613,6 +613,29 @@
     return n >= 0 ? "amt-pos" : "amt-neg";
   }
 
+  // 背景色に対してコントラスト比(WCAG)が高くなる方の文字色(白 or --text)を選ぶ
+  // 食費・交通費・娯楽・その他は白文字だと4.5:1未満で読みにくいため、カテゴリ色ごとに動的判定する
+  function relativeLuminance(hex) {
+    var c = hex.replace("#", "");
+    var r = parseInt(c.substr(0, 2), 16) / 255;
+    var g = parseInt(c.substr(2, 2), 16) / 255;
+    var b = parseInt(c.substr(4, 2), 16) / 255;
+    function adj(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+    r = adj(r); g = adj(g); b = adj(b);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+  function contrastRatio(l1, l2) {
+    var a = Math.max(l1, l2), b = Math.min(l1, l2);
+    return (a + 0.05) / (b + 0.05);
+  }
+  var DARK_TEXT_LUM = relativeLuminance("#24292f"); // var(--text)
+  function badgeTextColor(bgHex) {
+    var bgLum = relativeLuminance(bgHex);
+    var vsWhite = contrastRatio(bgLum, 1);
+    var vsDark = contrastRatio(bgLum, DARK_TEXT_LUM);
+    return vsDark > vsWhite ? "var(--text)" : "#fff";
+  }
+
   // ---------- Rendering: rules ----------
   function renderRuleCategoryOptions(select) {
     select.innerHTML = "";
@@ -634,7 +657,9 @@
       var item = createEl("div", "rule-item");
 
       var badge = createEl("span", "badge", rule.category);
-      badge.style.background = CATEGORY_COLORS[rule.category] || "#999";
+      var badgeBg = CATEGORY_COLORS[rule.category] || "#999";
+      badge.style.background = badgeBg;
+      badge.style.color = badgeTextColor(badgeBg);
 
       var kw = createEl("span", "kw", rule.keyword);
 
