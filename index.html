@@ -123,7 +123,7 @@
       <label>文字コード:
         <select id="encodingSelect">
           <option value="UTF-8">UTF-8</option>
-          <option value="Shift_JIS">Shift_JIS(多くの銀行CSVはこちら)</option>
+          <option value="Shift_JIS" selected>Shift_JIS(多くの銀行CSVはこちら)</option>
         </select>
       </label>
       <label>口座:
@@ -545,11 +545,12 @@
 
     var newTxns = [];
     var duplicateCount = 0;
+    var skippedCount = 0; // 列数不足、または金額を数値として読み取れなかった行
     for (var i = 0; i < dataRows.length; i++) {
       var r = dataRows[i];
-      if (r.length <= Math.max(dateIdx, descIdx, amountIdx)) continue;
+      if (r.length <= Math.max(dateIdx, descIdx, amountIdx)) { skippedCount++; continue; }
       var amount = parseAmount(r[amountIdx]);
-      if (isNaN(amount)) continue;
+      if (isNaN(amount)) { skippedCount++; continue; }
       var desc = (r[descIdx] || "").trim();
       var date = (r[dateIdx] || "").trim();
       var txn = { date: date, desc: desc, amount: amount, category: categorize(desc, amount), manual: false, account: account };
@@ -578,6 +579,7 @@
       msg = newTxns.length + " 件の取引を追加しました" + (account ? "(口座: " + account + ")" : "");
       if (duplicateCount > 0) msg += "(重複" + duplicateCount + "件は除外)";
     }
+    if (skippedCount > 0) msg += "(金額を読み取れない行" + skippedCount + "件は除外)";
     setStatus(msg);
     renderAll();
   }
